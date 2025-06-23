@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>dice</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 50px;
+    }
+
+    .number-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 30px;
+    }
+
+    .number-box {
+      width: 80px;
+      height: 80px;
+      margin: 0 15px;
+      font-size: 36px;
+      font-weight: bold;
+      background-color: #f0f0f0;
+      border: 2px solid #888;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    button {
+      font-size: 18px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="number-container">
+    <div class="number-box" id="num1">?</div>
+    <div class="number-box" id="num2">?</div>
+    <div class="number-box" id="num3">?</div>
+  </div>
+
+  <button onclick="rollNumbers()">Roll Numbers</button>
+
+  <!-- Confetti library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <script>
+    const allowedNumbers = [1, 2, 3, 4, 7];
+
+    function getRandomNumber() {
+      const index = Math.floor(Math.random() * allowedNumbers.length);
+      return allowedNumbers[index];
+    }
+
+    function rollNumbers() {
+      const boxes = [
+        document.getElementById('num1'),
+        document.getElementById('num2'),
+        document.getElementById('num3')
+      ];
+
+      let rollCount = 0;
+      const maxRolls = 15;
+      const interval = setInterval(() => {
+        boxes.forEach(box => {
+          const num = getRandomNumber();
+          box.textContent = num;
+          box.style.transform = 'scale(1.2)';
+          setTimeout(() => {
+            box.style.transform = 'scale(1)';
+          }, 100);
+        });
+
+        rollCount++;
+        if (rollCount >= maxRolls) {
+          clearInterval(interval);
+          finalizeNumbers(boxes);
+        }
+      }, 80);
+    }
+
+    function finalizeNumbers(boxes) {
+      const finalNumbers = boxes.map(box => {
+        const num = getRandomNumber();
+        box.textContent = num;
+        return num;
+      });
+
+      if (finalNumbers[0] === finalNumbers[1] && finalNumbers[1] === finalNumbers[2]) {
+        launchConfetti();
+      }
+    }
+
+    function launchConfetti() {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 }
+      });
+    }
+  </script>
+
+</body>
+</html>
