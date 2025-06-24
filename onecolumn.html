@@ -1,145 +1,230 @@
-<!DOCTYPE HTML>
-<!--
-	Minimaxing by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
-<html>
-	<head>
-		<title>One Column - Minimaxing by HTML5 UP</title>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-		<link rel="stylesheet" href="assets/css/main.css" />
-	</head>
-	<body>
-		<div id="page-wrapper">
+<!DOCTYPE html>
+<html lang="en" >
+<head>
+  <meta charset="UTF-8" />
+  <title>Game with Spaced Enemy Spawn and Slower Rate</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: Arial, sans-serif;
+    }
+    #score {
+      font-size: 24px;
+      margin-top: 20px;
+      color: #333;
+    }
+    canvas {
+      background: #eee;
+      display: block;
+      margin: 10px auto;
+      border: 2px solid #333;
+    }
+    #gameOver {
+      font-size: 32px;
+      color: red;
+      display: none;
+      margin-top: 20px;
+    }
+    #restartBtn {
+      display: none;
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="400" height="400"></canvas>
+  <div id="gameOver">Game Over!</div>
+  <button id="restartBtn">Restart</button>
 
-			<!-- Header -->
-				<div id="header-wrapper">
-					<div class="container">
-						<div class="row">
-							<div class="col-12">
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreText = document.getElementById('score');
+    const gameOverText = document.getElementById('gameOver');
+    const restartBtn = document.getElementById('restartBtn');
 
-								<header id="header">
-									<h1><a href="index.html" id="logo">Minimaxing</a></h1>
-									<nav id="nav">
-										<a href="index.html">Homepage</a>
-										<a href="twocolumn1.html">Two Column #1</a>
-										<a href="twocolumn2.html">Two Column #2</a>
-										<a href="onecolumn.html" class="current-page-item">One Column</a>
-										<a href="threecolumn.html">Three Column</a>
-									</nav>
-								</header>
+    const player = {
+      x: 180,
+      y: 180,
+      size: 20,
+      speed: 3,
+      color: 'blue'
+    };
 
-							</div>
-						</div>
-					</div>
-				</div>
+    const keys = {
+      ArrowUp: false,
+      ArrowDown: false,
+      ArrowLeft: false,
+      ArrowRight: false
+    };
 
-			<!-- Main -->
-				<div id="main">
-					<div class="container">
-						<div class="row main-row">
-							<div class="col-12">
+    let enemies = [];         // enemies moving left from right
+    let fallingEnemies = [];  // enemies falling down from top
+    let score = 0;
+    let gameRunning = true;
+    let spawnTimer;
 
-								<section>
-									<h2>One Column (no sidebar)</h2>
-									<p>This is the second generic interior page. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean ante ante, viverra a ornare sed, convallis sed est. Proin felis sapien, adipiscing quis eleifend vel, sodales vitae sapien. Donec vel lacus leo, eu convallis metus. Cras egestas feugiat tortor, vitae interdum augue aliquam a. Sed nec augue id orci egestas commodo in eget magna. Nunc eleifend diam non odio laoreet placerat gravida nulla bibendum. Phasellus tempus imperdiet suscipit.</p>
-									<p>Mauris risus nulla, pulvinar vitae sagittis a, pharetra nec tellus. Suspendisse varius enim ac felis mattis aliquam. Aenean et justo quis ipsum gravida lacinia. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec lacinia bibendum cursus. Nullam nec pellentesque lacus. In porta erat in tortor rhoncus quis accumsan magna pretium. Nulla posuere magna eget mauris lacinia in mollis sem fermentum. Donec mollis adipiscing mauris, ut posuere enim rhoncus ut. Nunc commodo vestibulum orci vel placerat. Cras sed risus libero. Donec ac lacus vitae lectus mattis commodo id vitae libero. Etiam lorem odio, volutpat nec pulvinar sit amet, tincidunt ut lacus. Pellentesque consequat arcu vel nisi lobortis in pellentesque orci sollicitudin. Cras gravida lacus turpis, consectetur porttitor lectus. Cras malesuada tortor id neque porta ut semper quam iaculis.</p>
-									<p>Nulla ut tortor quam, a luctus nunc. Nulla condimentum diam porttitor arcu placerat tincidunt. Nunc non augue ipsum. Nulla facilisi. Phasellus feugiat augue in ipsum egestas semper. Suspendisse blandit, nisl ullamcorper blandit sollicitudin, sem leo auctor lectus, et volutpat mauris elit et odio. Ut elementum risus in metus mollis tristique vulputate nulla interdum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis vitae orci dui, ut facilisis dui.</p>
-								</section>
+    window.addEventListener('keydown', (e) => {
+      if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = true;
+      }
+    });
 
-							</div>
-						</div>
-					</div>
-				</div>
+    window.addEventListener('keyup', (e) => {
+      if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = false;
+      }
+    });
 
-			<!-- Footer -->
-				<div id="footer-wrapper">
-					<div class="container">
-						<div class="row">
-							<div class="col-8 col-12-medium">
+    function spawnEnemies() {
+      const minSpawnCount = 5;
+      for (let i = 0; i < minSpawnCount; i++) {
+        const maxScoreForGrowth = 20; // capped growth at 20
+        const effectiveScore = Math.min(score, maxScoreForGrowth);
+        const size = 30 + 0.5 * effectiveScore;
+        const yPos = Math.random() * (canvas.height - size);
+        const startX = canvas.width + Math.random() * 100; // spaced out spawn on X axis
+        enemies.push({ x: startX, y: yPos, size: size, color: 'red' });
+      }
+    }
 
-								<section>
-									<h2>How about a truckload of links?</h2>
-									<div>
-										<div class="row">
-											<div class="col-3 col-6-medium col-12-small">
-												<ul class="link-list">
-													<li><a href="#">Sed neque nisi consequat</a></li>
-													<li><a href="#">Dapibus sed mattis blandit</a></li>
-													<li><a href="#">Quis accumsan lorem</a></li>
-													<li><a href="#">Suspendisse varius ipsum</a></li>
-													<li><a href="#">Eget et amet consequat</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6-medium col-12-small">
-												<ul class="link-list">
-													<li><a href="#">Quis accumsan lorem</a></li>
-													<li><a href="#">Sed neque nisi consequat</a></li>
-													<li><a href="#">Eget et amet consequat</a></li>
-													<li><a href="#">Dapibus sed mattis blandit</a></li>
-													<li><a href="#">Vitae magna sed dolore</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6-medium col-12-small">
-												<ul class="link-list">
-													<li><a href="#">Sed neque nisi consequat</a></li>
-													<li><a href="#">Dapibus sed mattis blandit</a></li>
-													<li><a href="#">Quis accumsan lorem</a></li>
-													<li><a href="#">Suspendisse varius ipsum</a></li>
-													<li><a href="#">Eget et amet consequat</a></li>
-												</ul>
-											</div>
-											<div class="col-3 col-6-medium col-12-small">
-												<ul class="link-list">
-													<li><a href="#">Quis accumsan lorem</a></li>
-													<li><a href="#">Sed neque nisi consequat</a></li>
-													<li><a href="#">Eget et amet consequat</a></li>
-													<li><a href="#">Dapibus sed mattis blandit</a></li>
-													<li><a href="#">Vitae magna sed dolore</a></li>
-												</ul>
-											</div>
-										</div>
-									</div>
-								</section>
+    function spawnFallingEnemies() {
+      const count = 3;
+      for (let i = 0; i < count; i++) {
+        const maxScoreForGrowth = 20; // capped growth at 20
+        const effectiveScore = Math.min(score, maxScoreForGrowth);
+        const size = 30 + 0.5 * effectiveScore;
+        const xPos = Math.random() * (canvas.width - size);
+        fallingEnemies.push({ x: xPos, y: -size, size: size, color: 'darkred' });
+      }
+    }
 
-							</div>
-							<div class="col-4 col-12-medium">
+    function updateSpawnRate() {
+      clearInterval(spawnTimer);
+      const minInterval = 1000;  // Increased minimum interval (was 500)
+      const maxScoreForGrowth = 20; 
+      const effectiveScore = Math.min(score, maxScoreForGrowth);
+      const baseInterval = Math.max(3000 - effectiveScore * 50, minInterval); // Slower decrease
+      const spawnInterval = baseInterval / 2;  // Keep twice as fast spawning
 
-								<section>
-									<h2>Something of interest</h2>
-									<p>Duis neque nisi, dapibus sed mattis quis, rutrum accumsan sed.
-									Suspendisse eu varius nibh. Suspendisse vitae magna eget odio amet
-									mollis justo facilisis quis. Sed sagittis mauris amet tellus gravida
-									lorem ipsum dolor sit blandit.</p>
-									<footer class="controls">
-										<a href="#" class="button">Oh, please continue ....</a>
-									</footer>
-								</section>
+      spawnTimer = setInterval(() => {
+        if (gameRunning) {
+          spawnEnemies();
+          if(score >= 30) {
+            spawnFallingEnemies();
+          }
+        }
+      }, spawnInterval);
+    }
 
-							</div>
-						</div>
-						<div class="row">
-							<div class="col-12">
+    function resetGame() {
+      player.x = 180;
+      player.y = 180;
+      enemies = [];
+      fallingEnemies = [];
+      score = 0;
+      scoreText.textContent = "Score: 0";
+      gameOverText.style.display = 'none';
+      restartBtn.style.display = 'none';
+      gameRunning = true;
+      updateSpawnRate();
+      gameLoop();
+    }
 
-								<div id="copyright">
-									&copy; Untitled. All rights reserved. | Design: <a href="http://html5up.net">HTML5 UP</a>
-								</div>
+    restartBtn.addEventListener('click', resetGame);
 
-							</div>
-						</div>
-					</div>
-				</div>
+    function update() {
+      if (!gameRunning) return;
 
-		</div>
+      if (keys.ArrowUp) player.y -= player.speed;
+      if (keys.ArrowDown) player.y += player.speed;
+      if (keys.ArrowLeft) player.x -= player.speed;
+      if (keys.ArrowRight) player.x += player.speed;
 
-		<!-- Scripts -->
-			<script src="assets/js/jquery.min.js"></script>
-			<script src="assets/js/browser.min.js"></script>
-			<script src="assets/js/breakpoints.min.js"></script>
-			<script src="assets/js/util.js"></script>
-			<script src="assets/js/main.js"></script>
+      player.x = Math.max(0, Math.min(player.x, canvas.width - player.size));
+      player.y = Math.max(0, Math.min(player.y, canvas.height - player.size));
 
-	</body>
+      const maxScoreForGrowth = 20;  // capped growth at 20
+      const effectiveScore = Math.min(score, maxScoreForGrowth);
+      const enemySpeed = (1 + 0.1 * effectiveScore) * 0.5;  // speed halved
+
+      // Update enemies moving left
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        enemy.x -= enemySpeed;
+
+        if (enemy.x + enemy.size < 0) {
+          enemies.splice(i, 1);
+          score += 0.5;  // score increment 0.5
+          scoreText.textContent = "Score: " + score.toFixed(2);
+          updateSpawnRate();
+        } else if (isColliding(player, enemy)) {
+          gameOver();
+        }
+      }
+
+      // Update falling enemies moving down
+      for (let i = fallingEnemies.length - 1; i >= 0; i--) {
+        const enemy = fallingEnemies[i];
+        enemy.y += enemySpeed;
+
+        if (enemy.y - enemy.size > canvas.height) {
+          fallingEnemies.splice(i, 1);
+          score += 0.5;  // score increment 0.5
+          scoreText.textContent = "Score: " + score.toFixed(2);
+          updateSpawnRate();
+        } else if (isColliding(player, enemy)) {
+          gameOver();
+        }
+      }
+    }
+
+    function isColliding(a, b) {
+      return (
+        a.x < b.x + b.size &&
+        a.x + a.size > b.x &&
+        a.y < b.y + b.size &&
+        a.y + a.size > b.y
+      );
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, player.size, player.size);
+
+      for (const enemy of enemies) {
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+      }
+      for (const enemy of fallingEnemies) {
+        ctx.fillStyle = enemy.color;
+        ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      if (gameRunning) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function gameOver() {
+      gameRunning = false;
+      gameOverText.style.display = 'block';
+      restartBtn.style.display = 'inline-block';
+      clearInterval(spawnTimer);
+    }
+
+    // Start the game
+    updateSpawnRate();
+    gameLoop();
+  </script>
+</body>
 </html>
