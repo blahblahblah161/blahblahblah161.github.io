@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Parry Game with Health, Blue Orb & Boss Respawn + Beam</title>
+<title>Parry limited</title>
 <style>
   body {
     margin: 0;
@@ -373,9 +373,17 @@ function checkCollisions() {
         updateHealthBar();
         enemy.y = canvas.height + 100;
       }
+    }  else if (enemy.type === "boss") {
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist < player.radius + enemy.radius) {
+        player.health -= 50;
+        updateHealthBar();
+        if (player.health <= 0) {
+          gameOver();
+        }
+      }
     }
   }
-}
 
 function updateScore() {
   scoreDisplay.textContent = "Score: " + score;
