@@ -1,219 +1,539 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Parry unlimited</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #111;
-      font-family: Arial, sans-serif;
-      color: white;
-    }
-    canvas {
-      display: block;
-      margin: auto;
-      background: #222;
-      border: 2px solid white;
-    }
-    #gameOver {
-      position: absolute;
-      top: 40%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 3em;
-      display: none;
-      color: red;
-    }
-    #score {
-      position: absolute;
-      top: 10px;
-      left: 20px;
-      font-size: 1.2em;
-    }
-    #cooldownBarContainer {
-      position: absolute;
-      top: 10px;
-      right: 20px;
-      width: 100px;
-      height: 10px;
-      border: 1px solid white;
-      background: #333;
-    }
-    #cooldownBar {
-      height: 100%;
-      width: 100%;
-      background: lime;
-      transition: width 0.1s linear;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Parry Game with Health, Blue Orb & Boss Respawn + Beam</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: Arial, sans-serif;
+    color: white;
+    user-select: none;
+  }
+
+  #uiContainer {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    padding: 5px 10px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    z-index: 10;
+  }
+
+  #score {
+    font-size: 1.2em;
+    color: white;
+    flex: 1;
+  }
+
+  #healthBarContainer {
+    width: 200px;
+    height: 20px;
+    border: 1px solid white;
+    background: #333;
+    flex: 1;
+  }
+
+  #healthBar {
+    height: 100%;
+    width: 100%;
+    background: dodgerblue;
+    transition: width 0.3s ease;
+  }
+
+  #cooldownBarContainer {
+    width: 100px;
+    height: 10px;
+    border: 1px solid white;
+    background: #333;
+    flex: 1;
+    margin-left: 10px;
+  }
+
+  #cooldownBar {
+    height: 100%;
+    width: 100%;
+    background: lime;
+    transition: width 0.1s linear;
+  }
+
+  canvas#gameCanvas {
+    display: block;
+    margin: 80px auto 0 auto; /* push down to leave space for UI on top */
+    background: #222;
+    border: 2px solid white;
+    position: relative;
+    z-index: 1;
+  }
+
+  #gameOver {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3em;
+    color: red;
+    text-align: center;
+    display: none;
+    z-index: 20;
+  }
+
+  #replayButton {
+    position: fixed;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    font-size: 1.2em;
+    background: limegreen;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: none;
+    user-select: none;
+    z-index: 20;
+  }
+
+  #replayButton:hover {
+    background: #58a458;
+  }
+</style>
 </head>
 <body>
+  <div id="uiContainer">
+    <div id="score">Score: 0</div>
+    <div id="healthBarContainer"><div id="healthBar"></div></div>
+    <div id="cooldownBarContainer"><div id="cooldownBar"></div></div>
+  </div>
+
   <canvas id="gameCanvas" width="600" height="400"></canvas>
+
   <div id="gameOver">Game Over!</div>
-  <div id="score">Score: 0</div>
-  <div id="cooldownBarContainer"><div id="cooldownBar"></div></div>
+  <button id="replayButton">Replay</button>
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-    const scoreDisplay = document.getElementById("score");
-    const cooldownBar = document.getElementById("cooldownBar");
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreDisplay = document.getElementById("score");
+const cooldownBar = document.getElementById("cooldownBar");
+const gameOverText = document.getElementById("gameOver");
+const replayButton = document.getElementById("replayButton");
+const healthBar = document.getElementById("healthBar");
 
-    const player = {
-      x: canvas.width / 2 - 25,
-      y: canvas.height - 50,
-      width: 50,
-      height: 50,
-      color: "lime",
-      speed: 5,
-      parryCooldown: 2000, // 2 seconds
-      lastParryTime: -Infinity,
-      parryWindow: 200, // 0.2 seconds to trigger reflect
-    };
+let player, enemies, keys, score, parryTime, gameRunning, bossActive, bossDefeatedCount, beams;
 
-    let keys = {};
-    let enemies = [];
-    let score = 0;
-    let parryTime = 0;
-    let gameRunning = true;
+function initGame() {
+  player = {
+    x: canvas.width / 2,
+    y: canvas.height - 50,
+    radius: 25,
+    color: "lime",
+    speed: 5,
+    parryCooldown: 2000,
+    lastParryTime: -Infinity,
+    parryWindow: 200,
+    maxHealth: 100,
+    health: 100,
+  };
 
-    document.addEventListener("keydown", (e) => {
-      keys[e.key] = true;
+  enemies = [];
+  beams = [];
+  keys = {};
+  score = 0;
+  parryTime = 0;
+  gameRunning = true;
+  bossActive = false;
+  bossDefeatedCount = 0;
+  updateScore();
+  updateHealthBar();
+  gameOverText.style.display = "none";
+  replayButton.style.display = "none";
 
-      // Handle parry attempt
-      if ((e.key === "ArrowUp" || e.key === "w")) {
-        const now = Date.now();
-        if (now - player.lastParryTime >= player.parryCooldown) {
-          parryTime = now;
-          player.lastParryTime = now;
+  ctx.fillStyle = "#222";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  gameLoop();
+}
+
+document.addEventListener("keydown", (e) => {
+  if(!gameRunning) return;
+  keys[e.key] = true;
+
+  if ((e.key === "ArrowUp" || e.key === "w")) {
+    const now = Date.now();
+    if (now - player.lastParryTime >= player.parryCooldown) {
+      parryTime = now;
+      player.lastParryTime = now;
+    }
+  }
+
+  if (e.key === " " && bossActive) {
+    shootBeam();
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
+
+const SPAWN_INTERVAL_MS = 500;
+const BLUE_ORB_CHANCE = 0.0005;
+const BEAM_SPEED = 8;
+const BEAM_WIDTH = 6;
+const BEAM_HEIGHT = 20;
+const BEAM_DAMAGE = 2;
+
+function shootBeam() {
+  beams.push({
+    x: player.x,
+    y: player.y - player.radius,
+    width: BEAM_WIDTH,
+    height: BEAM_HEIGHT,
+    speed: BEAM_SPEED,
+    color: "cyan",
+  });
+}
+
+function spawnEnemy() {
+  const radius = 15;
+  const x = Math.random() * (canvas.width - 2 * radius) + radius;
+  const isParryable = Math.random() < 0.2;
+  
+  const baseSpeed = 3;
+  const speed = bossActive ? baseSpeed * 1.5 : baseSpeed;
+
+  enemies.push({
+    x,
+    y: -radius,
+    radius,
+    speed,
+    color: isParryable ? "yellow" : "red",
+    direction: "down",
+    parried: false,
+    isParryable,
+    trail: [],
+    type: "projectile",
+  });
+
+  if (Math.random() < BLUE_ORB_CHANCE) {
+    const orbX = Math.random() * (canvas.width - 20) + 10;
+    enemies.push({
+      x: orbX,
+      y: -10,
+      radius: 10,
+      speed,
+      color: "blue",
+      direction: "down",
+      parried: false,
+      isParryable: false,
+      trail: [],
+      type: "blueOrb",
+    });
+  }
+}
+
+function spawnBoss() {
+  if (bossActive) return;
+
+  bossActive = true;
+  const radius = 40;
+  const x = canvas.width / 2;
+  enemies.push({
+    x,
+    y: -radius,
+    radius,
+    speed: 1.5,
+    color: "purple",
+    direction: "down",
+    parried: false,
+    isParryable: false,
+    trail: [],
+    type: "boss",
+    health: 30,
+  });
+}
+
+function updatePlayer() {
+  if ((keys["ArrowLeft"] || keys["a"]) && player.x - player.radius > 0) {
+    player.x -= player.speed;
+  }
+  if ((keys["ArrowRight"] || keys["d"]) && player.x + player.radius < canvas.width) {
+    player.x += player.speed;
+  }
+}
+
+function updateEnemies() {
+  const trailMaxLength = 10;
+  for (let enemy of enemies) {
+    enemy.y += enemy.speed * (enemy.direction === "down" ? 1 : -1);
+
+    if (enemy.type === "boss") {
+      enemy.x += 2 * Math.sin(Date.now() / 500);
+      if (enemy.x - enemy.radius < 0) enemy.x = enemy.radius;
+      if (enemy.x + enemy.radius > canvas.width) enemy.x = canvas.width - enemy.radius;
+
+      if (enemy.y - enemy.radius > canvas.height) {
+        enemy.y = -enemy.radius;
+      }
+    }
+
+    enemy.trail.push({ x: enemy.x, y: enemy.y });
+    if (enemy.trail.length > trailMaxLength) {
+      enemy.trail.shift();
+    }
+  }
+
+  enemies = enemies.filter(enemy => !(enemy.type !== "boss" && (enemy.y > canvas.height + enemy.radius || enemy.y + enemy.radius < -enemy.radius)));
+}
+
+function updateBeams() {
+  for (let i = beams.length - 1; i >= 0; i--) {
+    let beam = beams[i];
+    beam.y -= beam.speed;
+
+    for (let enemy of enemies) {
+      if (enemy.type === "boss" && circleRectCollision(enemy, beam)) {
+        enemy.health -= BEAM_DAMAGE;
+        beams.splice(i, 1);
+        if (enemy.health <= 0) {
+          score += 30;
+          updateScore();
+          bossDefeatedCount++;
+          bossActive = false;
+          enemies = enemies.filter(e => e !== enemy);
         }
-      }
-    });
-
-    document.addEventListener("keyup", (e) => {
-      keys[e.key] = false;
-    });
-
-    function spawnEnemy() {
-      const size = 30;
-      const x = Math.random() * (canvas.width - size);
-      const isParryable = Math.random() < 0.2; // 🔁 More rare (20% chance)
-      enemies.push({
-        x,
-        y: -size,
-        width: size,
-        height: size,
-        speed: 3,
-        color: isParryable ? "yellow" : "red",
-        direction: "down",
-        parried: false,
-        isParryable,
-      });
-    }
-
-    function updatePlayer() {
-      if ((keys["ArrowLeft"] || keys["a"]) && player.x > 0) {
-        player.x -= player.speed;
-      }
-      if ((keys["ArrowRight"] || keys["d"]) && player.x + player.width < canvas.width) {
-        player.x += player.speed;
+        break;
       }
     }
 
-    function updateEnemies() {
-      for (let enemy of enemies) {
-        enemy.y += enemy.speed * (enemy.direction === "down" ? 1 : -1);
-      }
-
-      enemies = enemies.filter(
-        (enemy) =>
-          enemy.y < canvas.height + enemy.height &&
-          enemy.y + enemy.height > -enemy.height
-      );
+    if (beam.y + beam.height < 0) {
+      beams.splice(i, 1);
     }
+  }
+}
 
-    function checkCollisions() {
-      const now = Date.now();
+function circleRectCollision(circle, rect) {
+  let distX = Math.abs(circle.x - rect.x - rect.width / 2);
+  let distY = Math.abs(circle.y - rect.y - rect.height / 2);
 
-      for (let enemy of enemies) {
-        if (enemy.direction === "down") {
-          const closeToPlayer =
-            enemy.y + enemy.height >= player.y &&
-            enemy.y <= player.y + player.height;
+  if (distX > (rect.width / 2 + circle.radius)) { return false; }
+  if (distY > (rect.height / 2 + circle.radius)) { return false; }
 
-          const horizontallyAligned =
-            enemy.x < player.x + player.width &&
-            enemy.x + enemy.width > player.x;
+  if (distX <= (rect.width / 2)) { return true; }
+  if (distY <= (rect.height / 2)) { return true; }
 
-          const withinParryWindow = now - parryTime <= player.parryWindow;
+  let dx = distX - rect.width / 2;
+  let dy = distY - rect.height / 2;
+  return (dx * dx + dy * dy <= (circle.radius * circle.radius));
+}
 
-          if (closeToPlayer && horizontallyAligned) {
-            if (enemy.color === "yellow" && withinParryWindow) {
-              enemy.direction = "up";
-              enemy.parried = true;
-              enemy.color = "cyan";
-              score++;
-              updateScore();
-              continue;
-            }
-
-            if (!enemy.parried) {
-              gameRunning = false;
-              document.getElementById("gameOver").style.display = "block";
-            }
+function checkCollisions() {
+  for (let enemy of enemies) {
+    if (enemy.type === "projectile") {
+      if (!enemy.parried && enemy.color === "yellow") {
+        if (parryTime && Date.now() - parryTime <= player.parryWindow) {
+          const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+          if (dist < player.radius + enemy.radius) {
+            enemy.color = "cyan";
+            enemy.parried = true;
+            enemy.direction = "up"; // Bounce back up on parry
+            score++;
+            updateScore();
+            parryTime = 0;
+            playDing();
           }
         }
       }
-    }
-
-    function updateScore() {
-      scoreDisplay.textContent = "Score: " + score;
-    }
-
-    function drawPlayer() {
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-    }
-
-    function drawEnemies() {
-      for (let enemy of enemies) {
-        ctx.fillStyle = enemy.color;
-        ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+      if (!enemy.parried) {
+        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        if (dist < player.radius + enemy.radius) {
+          player.health -= 10;
+          updateHealthBar();
+          enemy.y = canvas.height + 100; // remove projectile on hit
+          if (player.health <= 0) {
+            gameOver();
+          }
+        }
+      }
+    } else if (enemy.type === "blueOrb") {
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist < player.radius + enemy.radius) {
+        player.health = Math.min(player.maxHealth, player.health + 20);
+        updateHealthBar();
+        enemy.y = canvas.height + 100;
       }
     }
+  }
+}
 
-    function updateCooldownBar() {
-      const now = Date.now();
-      const elapsed = now - player.lastParryTime;
-      let progress = Math.min(elapsed / player.parryCooldown, 1);
-      cooldownBar.style.width = `${progress * 100}%`;
-      cooldownBar.style.background = progress === 1 ? "lime" : "orange";
+function updateScore() {
+  scoreDisplay.textContent = "Score: " + score;
+}
+
+function updateHealthBar() {
+  healthBar.style.width = (player.health / player.maxHealth) * 100 + "%";
+}
+
+function drawPlayer() {
+  const x = player.x;
+  const y = player.y;
+  const size = player.radius;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Draw prism shape (triangular prism)
+  ctx.fillStyle = "lime";
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 2;
+
+  // Front triangle
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.86, size / 2);
+  ctx.lineTo(-size * 0.86, size / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Back triangle offset
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.6);
+  ctx.lineTo(size * 0.6, size * 0.6);
+  ctx.lineTo(-size * 0.6, size * 0.6);
+  ctx.closePath();
+  ctx.fillStyle = "darkgreen";
+  ctx.fill();
+  ctx.stroke();
+
+  // Connect edges for prism effect
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.86, size / 2);
+  ctx.lineTo(-size * 0.6, size * 0.6);
+  ctx.lineTo(size * 0.6, size * 0.6);
+  ctx.lineTo(size * 0.86, size / 2);
+  ctx.closePath();
+  ctx.fillStyle = "green";
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawEnemies() {
+  for (let enemy of enemies) {
+    // Draw trail
+    ctx.strokeStyle = enemy.color;
+    ctx.lineWidth = enemy.radius * 0.5;
+    ctx.beginPath();
+    for (let i = 0; i < enemy.trail.length - 1; i++) {
+      const p = enemy.trail[i];
+      const np = enemy.trail[i + 1];
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(np.x, np.y);
     }
+    ctx.stroke();
 
-    function gameLoop() {
-      if (!gameRunning) return;
+    // Draw ball shape
+    ctx.beginPath();
+    ctx.fillStyle = enemy.color;
+    ctx.shadowColor = enemy.color;
+    ctx.shadowBlur = 10;
+    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+function drawBeams() {
+  for (let beam of beams) {
+    ctx.fillStyle = beam.color;
+    ctx.shadowColor = beam.color;
+    ctx.shadowBlur = 10;
+    ctx.fillRect(beam.x - beam.width / 2, beam.y - beam.height, beam.width, beam.height);
+    ctx.shadowBlur = 0;
+  }
+}
 
-      updatePlayer();
-      updateEnemies();
-      checkCollisions();
+function updateCooldownBar() {
+  const now = Date.now();
+  const elapsed = now - player.lastParryTime;
+  let progress = Math.min(elapsed / player.parryCooldown, 1);
+  cooldownBar.style.width = `${progress * 100}%`;
+  cooldownBar.style.background = progress === 1 ? "lime" : "orange";
+}
 
-      drawPlayer();
-      drawEnemies();
-      updateCooldownBar();
+function playDing() {
+  const ctxAudio = new AudioContext();
+  const oscillator = ctxAudio.createOscillator();
+  const gainNode = ctxAudio.createGain();
 
-      requestAnimationFrame(gameLoop);
+  oscillator.type = "square";
+  oscillator.frequency.value = 880;
+  gainNode.gain.setValueAtTime(0.15, ctxAudio.currentTime);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(ctxAudio.destination);
+  oscillator.start();
+
+  oscillator.stop(ctxAudio.currentTime + 0.1);
+}
+
+function gameOver() {
+  gameRunning = false;
+  gameOverText.style.display = "block";
+  replayButton.style.display = "inline-block";
+}
+
+function gameLoop() {
+  if (!gameRunning) return;
+
+  // Spawn boss based on score and defeated count
+  if (!bossActive) {
+    if (score >= 10 && bossDefeatedCount === 0) {
+      spawnBoss();
+    } else if (bossDefeatedCount > 0 && score >= 10 + bossDefeatedCount * 100) {
+      spawnBoss();
     }
+  }
 
-    setInterval(() => {
-      if (gameRunning) spawnEnemy();
-    }, 1000);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    gameLoop();
-  </script>
+  updatePlayer();
+  updateEnemies();
+  updateBeams();
+  checkCollisions();
+
+  drawPlayer();
+  drawEnemies();
+  drawBeams();
+  updateCooldownBar();
+
+  requestAnimationFrame(gameLoop);
+}
+
+let spawnInterval = setInterval(() => {
+  if (gameRunning && !bossActive) spawnEnemy();
+}, SPAWN_INTERVAL_MS);
+
+replayButton.onclick = () => {
+  initGame();
+};
+
+initGame();
+</script>
+<B><br><br>Controls</B>
+<h4>Use the arrow keys to move<br>You can parry yellow projectiles with the up arrow<br>Use the spacebar to shoot a beam when the boss spawns<br>Get a high score</h4>
 </body>
 </html>
